@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 爆款去味重写器 MVP</title>
+    <!-- 引入 Tailwind CSS 快速美化 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .loading { display: none; }
+        .loading.active { display: inline-block; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-lg w-full max-w-6xl p-6 md:p-8">
+        <h1 class="text-2xl font-bold text-gray-800 mb-6 text-center">🔥 AI 爆款文案“去味”重写器</h1>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- 左侧：输入区，占一半宽度 -->
+            <div class="flex min-w-0 flex-col">
+
+                <label class="text-sm font-medium text-gray-700 mb-2">粘贴原文 / 爆款文案</label>
+                <textarea id="inputText" class="w-full h-64 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none" placeholder="把干巴巴的 AI 稿子丢进来..."></textarea>
+                
+                <button id="rewriteBtn" class="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition duration-300 flex items-center justify-center">
+                    <span id="btnText">一键去 AI 味重写</span>
+                    <svg id="spinner" class="loading animate-spin h-5 w-5 ml-2 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- 右侧：输出区，占一半宽度 -->
+            <div class="flex min-w-0 flex-col">
+
+                <label class="text-sm font-medium text-gray-700 mb-2">重写后的“人味”文案</label>
+                <textarea id="outputText" class="w-full h-64 p-3 border rounded-lg bg-gray-100 outline-none resize-none" placeholder="点击左侧按钮，奇迹即将发生..." readonly></textarea>
+                <button id="copyBtn" class="mt-4 w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-3 rounded-lg transition duration-300">一键复制</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ⚠️ 核心：你的大模型 API Key（替换成你自己的）
+        const API_KEY = "sk-be2e18abe7a34394a76d661ec1101404"; 
+        const API_URL = "https://api.deepseek.com/v1/chat/completions"; // 以 DeepSeek 为例
+
+        // 你刚刚总结的“顶级去 AI 味”核心 Prompt
+        const SYSTEM_PROMPT = `你现在是一个极其克制、真实的普通人，而不是一个演说家。请严格遵守以下“反 AI 规则”对文案进行重写：
+1. 禁止密集金句：不要写精心设计的排比。多用大白话。
+2. 情绪要克制，允许平淡：不要一路高潮。多写点平淡的流水账。
+3. 禁止演讲腔和鸡汤：改成平实的陈述。
+4. 禁用“后来”：用具体的时间线替代，比如“那天晚上”、“第二天”、“慢慢地”。
+5. 减少反问句：全文最多保留一个反问，不要连续自问自答。
+6. 保留核心观点，但必须重构叙事框架，确保查重率低于20%。`;
+
+        const rewriteBtn = document.getElementById('rewriteBtn');
+        const btnText = document.getElementById('btnText');
+        const spinner = document.getElementById('spinner');
+        const inputText = document.getElementById('inputText');
+        const outputText = document.getElementById('outputText');
+        const copyBtn = document.getElementById('copyBtn');
+
+        rewriteBtn.addEventListener('click', async () => {
+            const text = inputText.value.trim();
+            if (!text) return alert('请先输入文案！');
+
+            // 切换 Loading 状态
+            rewriteBtn.disabled = true;
+            btnText.innerText = '正在注入灵魂...';
+            spinner.classList.add('active');
+            outputText.value = '';
+
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${API_KEY}`
+                    },
+                    body: JSON.stringify({
+                        model: "deepseek-chat",
+                        messages: [
+                            { role: "system", content: SYSTEM_PROMPT },
+                            { role: "user", content: text }
+                        ],
+                        temperature: 0.9 // 调高一点，增加表达的随机性和人味
+                    })
+                });
+
+                const data = await response.json();
+                if (data.choices && data.choices.length > 0) {
+                    outputText.value = data.choices[0].message.content;
+                } else {
+                    outputText.value = "哎呀，引擎卡壳了，请检查 API Key 或稍后再试。";
+                }
+            } catch (error) {
+                outputText.value = "网络错误：" + error.message;
+            } finally {
+                // 恢复按钮状态
+                rewriteBtn.disabled = false;
+                btnText.innerText = '一键去 AI 味重写';
+                spinner.classList.remove('active');
+            }
+        });
+
+        // 复制功能
+        copyBtn.addEventListener('click', () => {
+            if (!outputText.value) return;
+            navigator.clipboard.writeText(outputText.value);
+            copyBtn.innerText = '复制成功！';
+            setTimeout(() => copyBtn.innerText = '一键复制', 2000);
+        });
+    </script>
+</body>
+</html>
