@@ -3,12 +3,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:track_app/data/saved_track.dart';
+import 'package:track_app/data/track_database.dart';
 import 'package:track_app/privacy.dart';
 import 'package:track_app/track/track_point.dart';
 import 'package:track_app/track/track_recorder.dart';
 import 'package:track_app/utils/format_utils.dart';
 import 'package:track_app/utils/map_utils.dart';
 import 'package:x_amap_base/x_amap_base.dart';
+
+import 'history_page.dart';
 
 void main() {
   runApp(const TrackApp());
@@ -79,11 +83,34 @@ class _MapPageState extends State<MapPage> with WidgetsBindingObserver {
     });
   }
 
-  void _stopRecording() {
+  Future<void> _stopRecording() async {
     setState(() {
       _recorder.stopRecording();
     });
-    debugPrint('本次记录点数：${_recorder.points.length}');
+
+    if (_recorder.points.length < 2) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('轨迹太短，未保存')));
+      return;
+    }
+
+    final double distance = _recorder.calculateTotalDistance();
+    final Duration duration = _recorder.duration;
+    await TrackDatabase.instance.insertTrack(
+      SavedTrack(
+        startTime: _recorder.points.first.timestamp,
+        endTime: _recorder.points.last.timestamp,
+        duration: duration.inMilliseconds,
+        distance: distance,
+        pointCount: _recorder.points.length,
+      ),
+      _recorder.points,
+    );
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('轨迹已保存')));
   }
 
   Future<void> _checkPrivacyConsent() async {
@@ -195,6 +222,18 @@ class _MapPageState extends State<MapPage> with WidgetsBindingObserver {
           title: Text(
             '轨迹记  距离:${formatDistance(distance)}, 时长:${formatDuration(duration)}',
           ),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.history),
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) =>  const HistoryPage(),
+                  ),
+                );
+              },
+            ),
+          ],
         ),
         body: AMapWidget(
           myLocationStyleOptions: MyLocationStyleOptions(_locationGranted),
