@@ -6,6 +6,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:track_app/privacy.dart';
 import 'package:track_app/track/track_point.dart';
 import 'package:track_app/track/track_recorder.dart';
+import 'package:track_app/utils/format_utils.dart';
+import 'package:track_app/utils/map_utils.dart';
 import 'package:x_amap_base/x_amap_base.dart';
 
 void main() {
@@ -181,9 +183,19 @@ class _MapPageState extends State<MapPage> with WidgetsBindingObserver {
     if (!_permissionChecked) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     } else {
+      final double distance = _recorder.calculateTotalDistance();
+      final Duration duration = _recorder.duration;
+      final latLngList = toLatLngList(_recorder.points);
+      final Set<Polyline> polylines = latLngList.length >= 2
+          ? {Polyline(points: latLngList, color: Colors.red, width: 5)}
+          : <Polyline>{};
       // 创建地图
       return Scaffold(
-        appBar: AppBar(title: const Text('轨迹记')),
+        appBar: AppBar(
+          title: Text(
+            '轨迹记  距离:${formatDistance(distance)}, 时长:${formatDuration(duration)}',
+          ),
+        ),
         body: AMapWidget(
           myLocationStyleOptions: MyLocationStyleOptions(_locationGranted),
           onMapCreated: (controller) {
@@ -213,7 +225,11 @@ class _MapPageState extends State<MapPage> with WidgetsBindingObserver {
                 timestamp: DateTime.now().millisecondsSinceEpoch,
               ),
             );
+            if (_recorder.isRecording) {
+              setState(() {});
+            }
           },
+          polylines: polylines,
         ),
 
         floatingActionButton: Row(
