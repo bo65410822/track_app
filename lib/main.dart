@@ -23,9 +23,15 @@ class TrackApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
+    return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: '轨迹记',
+      theme: ThemeData(
+        useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.teal, // 主色，后面可换成你喜欢的
+        ),
+      ),
       home: MapPage(),
     );
   }
@@ -227,9 +233,7 @@ class _MapPageState extends State<MapPage> with WidgetsBindingObserver {
               icon: const Icon(Icons.history),
               onPressed: () {
                 Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) =>  const HistoryPage(),
-                  ),
+                  MaterialPageRoute(builder: (context) => const HistoryPage()),
                 );
               },
             ),
