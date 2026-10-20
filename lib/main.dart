@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:track_app/privacy.dart';
+import 'package:track_app/track/track_point.dart';
+import 'package:track_app/track/track_recorder.dart';
 import 'package:x_amap_base/x_amap_base.dart';
 
 void main() {
@@ -31,7 +33,6 @@ class MapPage extends StatefulWidget {
 }
 
 class _MapPageState extends State<MapPage> with WidgetsBindingObserver {
-
   static const int _currentPrivacyVersion = 1;
   static const String _privacyVersionKey = 'privacy_consent_version';
 
@@ -45,6 +46,8 @@ class _MapPageState extends State<MapPage> with WidgetsBindingObserver {
 
   bool _permissionRequestInFlight = false;
   bool _amapInitialized = false;
+
+  final TrackRecorder _recorder = TrackRecorder();
 
   @override
   void initState() {
@@ -66,6 +69,19 @@ class _MapPageState extends State<MapPage> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  void _startRecording() {
+    setState(() {
+      _recorder.startRecording();
+    });
+  }
+
+  void _stopRecording() {
+    setState(() {
+      _recorder.stopRecording();
+    });
+    debugPrint('本次记录点数：${_recorder.points.length}');
   }
 
   Future<void> _checkPrivacyConsent() async {
@@ -96,10 +112,7 @@ class _MapPageState extends State<MapPage> with WidgetsBindingObserver {
     }
 
     final preferences = await SharedPreferences.getInstance();
-    await preferences.setInt(
-      _privacyVersionKey,
-      _currentPrivacyVersion,
-    );
+    await preferences.setInt(_privacyVersionKey, _currentPrivacyVersion);
 
     await _initializeAmap();
   }
@@ -145,8 +158,7 @@ class _MapPageState extends State<MapPage> with WidgetsBindingObserver {
       } else {
         // 位置权限被拒绝
         ScaffoldMessenger.of(context)
-            .showSnackBar(
-            const SnackBar(content: Text('需要定位权限才能显示当前位置')));
+            .showSnackBar(const SnackBar(content: Text('需要定位权限才能显示当前位置')));
       }
     } finally {
       _permissionRequestInFlight = false;
@@ -180,14 +192,12 @@ class _MapPageState extends State<MapPage> with WidgetsBindingObserver {
           onLocationChanged: (location) {
             if (!isLocationValid(location)) {
               debugPrint(
-                'no valid location result ：${location
-                    .latLng}, accuracy：${location.accuracy}',
+                'no valid location result ：${location.latLng}, accuracy：${location.accuracy}',
               );
               return;
             }
             debugPrint(
-              'location result ：${location.latLng}, accuracy：${location
-                  .accuracy}',
+              'location result ：${location.latLng}, accuracy：${location.accuracy}',
             );
             _latestLocation = location;
             if (!_hasCenteredOnUser) {
@@ -196,11 +206,32 @@ class _MapPageState extends State<MapPage> with WidgetsBindingObserver {
                 CameraUpdate.newLatLng(location.latLng),
               );
             }
+            _recorder.addTrackPoint(
+              TrackPoint(
+                latitude: location.latLng.latitude,
+                longitude: location.latLng.longitude,
+                timestamp: DateTime.now().millisecondsSinceEpoch,
+              ),
+            );
           },
         ),
-        floatingActionButton: FloatingActionButton(
-          onPressed: _moveToUserLocation,
-          child: const Icon(Icons.my_location),
+
+        floatingActionButton: Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            FloatingActionButton(
+              onPressed: _moveToUserLocation,
+              child: const Icon(Icons.my_location),
+            ),
+            FloatingActionButton(
+              onPressed: _recorder.isRecording
+                  ? _stopRecording
+                  : _startRecording,
+              child: Icon(
+                _recorder.isRecording ? Icons.stop : Icons.play_arrow,
+              ),
+            ),
+          ],
         ),
       );
     }
