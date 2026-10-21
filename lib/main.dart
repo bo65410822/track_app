@@ -208,7 +208,7 @@ class _MapPageState extends State<MapPage> with WidgetsBindingObserver {
   void _moveToUserLocation() {
     if (_latestLocation != null) {
       _mapController?.moveCamera(
-        CameraUpdate.newLatLng(_latestLocation!.latLng),
+        CameraUpdate.newLatLngZoom(_latestLocation!.latLng, 16),
       );
     } else {
       ScaffoldMessenger.of(context)
@@ -276,6 +276,15 @@ class _MapPageState extends State<MapPage> with WidgetsBindingObserver {
             myLocationStyleOptions: MyLocationStyleOptions(_locationGranted),
             onMapCreated: (controller) {
               _mapController = controller;
+              // 如果定位已经先到达，这里补一次居中
+              if (!_hasCenteredOnUser && _latestLocation != null) {
+                setState(() {
+                  _hasCenteredOnUser = true;
+                });
+                controller.moveCamera(
+                  CameraUpdate.newLatLngZoom(_latestLocation!.latLng, 16),
+                );
+              }
             },
             onLocationChanged: (location) {
               if (!isLocationValid(location)) {
@@ -288,10 +297,12 @@ class _MapPageState extends State<MapPage> with WidgetsBindingObserver {
                 'location result ：${location.latLng}, accuracy：${location.accuracy}',
               );
               _latestLocation = location;
-              if (!_hasCenteredOnUser) {
-                _hasCenteredOnUser = true;
-                _mapController?.moveCamera(
-                  CameraUpdate.newLatLng(location.latLng),
+              if (!_hasCenteredOnUser && _mapController != null) {
+                setState(() {
+                  _hasCenteredOnUser = true;
+                });
+                _mapController!.moveCamera(
+                  CameraUpdate.newLatLngZoom(location.latLng, 16),
                 );
               }
               _recorder.addTrackPoint(
@@ -316,6 +327,16 @@ class _MapPageState extends State<MapPage> with WidgetsBindingObserver {
             child: _buildStatsCard(distance, duration),
           ),
 
+          // 首次定位中的提示
+          if (!_hasCenteredOnUser)
+            Positioned(
+              top: 96,
+              left: 0,
+              right: 0,
+              child: Center(child: _buildLocatingHint()),
+            ),
+
+
           // 右下角定位按钮
           Positioned(
             right: 16,
@@ -329,6 +350,41 @@ class _MapPageState extends State<MapPage> with WidgetsBindingObserver {
             right: 0,
             bottom: 32,
             child: _buildRecordButton(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLocatingHint() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.95),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: const [
+          SizedBox(
+            width: 14,
+            height: 14,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              valueColor: AlwaysStoppedAnimation(kPrimaryColor),
+            ),
+          ),
+          SizedBox(width: 8),
+          Text(
+            '正在定位…',
+            style: TextStyle(color: kPrimaryColor, fontSize: 13),
           ),
         ],
       ),
