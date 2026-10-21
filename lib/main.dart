@@ -14,6 +14,10 @@ import 'package:x_amap_base/x_amap_base.dart';
 
 import 'history_page.dart';
 
+/// 主题色
+const Color kPrimaryColor = Color(0xFF009688);
+const Color kRecordingColor = Color(0xFFE53935);
+
 void main() {
   runApp(const TrackApp());
 }
@@ -29,10 +33,11 @@ class TrackApp extends StatelessWidget {
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.teal, // 主色，后面可换成你喜欢的
+          seedColor: const Color(0xFF009688), // 青绿主色
         ),
+        scaffoldBackgroundColor: const Color(0xFFF1F7F4),
       ),
-      home: MapPage(),
+      home: const MapPage(),
     );
   }
 }
@@ -215,84 +220,255 @@ class _MapPageState extends State<MapPage> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     if (!_permissionChecked) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    } else {
-      final double distance = _recorder.calculateTotalDistance();
-      final Duration duration = _recorder.duration;
-      final latLngList = toLatLngList(_recorder.points);
-      final Set<Polyline> polylines = latLngList.length >= 2
-          ? {Polyline(points: latLngList, color: Colors.red, width: 5)}
-          : <Polyline>{};
-      // 创建地图
-      return Scaffold(
-        appBar: AppBar(
-          title: Text(
-            '轨迹记  距离:${formatDistance(distance)}, 时长:${formatDuration(duration)}',
-          ),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.history),
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (context) => const HistoryPage()),
-                );
-              },
-            ),
-          ],
-        ),
-        body: AMapWidget(
-          myLocationStyleOptions: MyLocationStyleOptions(_locationGranted),
-          onMapCreated: (controller) {
-            _mapController = controller;
-          },
-          onLocationChanged: (location) {
-            if (!isLocationValid(location)) {
-              debugPrint(
-                'no valid location result ：${location.latLng}, accuracy：${location.accuracy}',
-              );
-              return;
-            }
-            debugPrint(
-              'location result ：${location.latLng}, accuracy：${location.accuracy}',
-            );
-            _latestLocation = location;
-            if (!_hasCenteredOnUser) {
-              _hasCenteredOnUser = true;
-              _mapController?.moveCamera(
-                CameraUpdate.newLatLng(location.latLng),
-              );
-            }
-            _recorder.addTrackPoint(
-              TrackPoint(
-                latitude: location.latLng.latitude,
-                longitude: location.latLng.longitude,
-                timestamp: DateTime.now().millisecondsSinceEpoch,
-              ),
-            );
-            if (_recorder.isRecording) {
-              setState(() {});
-            }
-          },
-          polylines: polylines,
-        ),
-
-        floatingActionButton: Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            FloatingActionButton(
-              onPressed: _moveToUserLocation,
-              child: const Icon(Icons.my_location),
-            ),
-            FloatingActionButton(
-              onPressed: _recorder.isRecording
-                  ? _stopRecording
-                  : _startRecording,
-              child: Icon(
-                _recorder.isRecording ? Icons.stop : Icons.play_arrow,
-              ),
-            ),
-          ],
-        ),
-      );
     }
+    final double distance = _recorder.calculateTotalDistance();
+    final Duration duration = _recorder.duration;
+    final latLngList = toLatLngList(_recorder.points);
+    final Set<Polyline> polylines = latLngList.length >= 2
+        ? {
+            Polyline(
+              points: latLngList,
+              color: kPrimaryColor,
+              width: 6,
+              capType: CapType.round,
+              joinType: JoinType.round,
+            ),
+          }
+        : <Polyline>{};
+
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: const Color(0xFFEAF5F0),
+        elevation: 0,
+        titleSpacing: 16,
+        title: Row(
+          children: const [
+            Icon(Icons.directions_run, color: kPrimaryColor),
+            SizedBox(width: 8),
+            Text(
+              '轨迹记',
+              style: TextStyle(
+                color: kPrimaryColor,
+                fontWeight: FontWeight.bold,
+                fontSize: 20,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton.icon(
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (context) => const HistoryPage()),
+              );
+            },
+            icon: const Icon(Icons.history, color: kPrimaryColor),
+            label: const Text(
+              '历史记录',
+              style: TextStyle(color: kPrimaryColor, fontSize: 16),
+            ),
+          ),
+        ],
+      ),
+      body: Stack(
+        children: [
+          AMapWidget(
+            myLocationStyleOptions: MyLocationStyleOptions(_locationGranted),
+            onMapCreated: (controller) {
+              _mapController = controller;
+            },
+            onLocationChanged: (location) {
+              if (!isLocationValid(location)) {
+                debugPrint(
+                  'no valid location result ：${location.latLng}, accuracy：${location.accuracy}',
+                );
+                return;
+              }
+              debugPrint(
+                'location result ：${location.latLng}, accuracy：${location.accuracy}',
+              );
+              _latestLocation = location;
+              if (!_hasCenteredOnUser) {
+                _hasCenteredOnUser = true;
+                _mapController?.moveCamera(
+                  CameraUpdate.newLatLng(location.latLng),
+                );
+              }
+              _recorder.addTrackPoint(
+                TrackPoint(
+                  latitude: location.latLng.latitude,
+                  longitude: location.latLng.longitude,
+                  timestamp: DateTime.now().millisecondsSinceEpoch,
+                ),
+              );
+              if (_recorder.isRecording) {
+                setState(() {});
+              }
+            },
+            polylines: polylines,
+          ),
+
+          // 顶部距离/时长信息卡片
+          Positioned(
+            top: 12,
+            left: 16,
+            right: 16,
+            child: _buildStatsCard(distance, duration),
+          ),
+
+          // 右下角定位按钮
+          Positioned(
+            right: 16,
+            bottom: 110,
+            child: _buildLocateButton(),
+          ),
+
+          // 底部开始/停止记录按钮
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 32,
+            child: _buildRecordButton(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatsCard(double distance, Duration duration) {
+    final kmText = (distance / 1000).toStringAsFixed(2);
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.95),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 12,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          _statItem(Icons.route, '距离', kmText, '公里'),
+          Container(width: 1, height: 34, color: const Color(0xFFE0E0E0)),
+          _statItem(
+            Icons.timer_outlined,
+            '时长',
+            formatDuration(duration),
+            null,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _statItem(IconData icon, String label, String value, String? unit) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+          Row(
+            children: [
+              Icon(icon, size: 16, color: Colors.grey),
+              const SizedBox(width: 4),
+              Text(label,
+                  style: const TextStyle(color: Colors.grey, fontSize: 13)),
+            ],
+          ),
+          const SizedBox(height: 4),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Text(
+                  value,
+                  style: const TextStyle(
+                    color: kPrimaryColor,
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                if (unit != null) ...[
+                  const SizedBox(width: 4),
+                  Text(unit,
+                      style:
+                          const TextStyle(color: Colors.grey, fontSize: 13)),
+                ],
+              ],
+            ),
+          ),
+        ],
+    );
+  }
+
+  Widget _buildLocateButton() {
+    return Material(
+      color: Colors.white,
+      shape: const CircleBorder(),
+      elevation: 4,
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: _moveToUserLocation,
+        child: const SizedBox(
+          width: 48,
+          height: 48,
+          child: Icon(Icons.my_location, color: kPrimaryColor),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRecordButton() {
+    final recording = _recorder.isRecording;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (recording)
+          Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+                Icon(Icons.circle, size: 10, color: kRecordingColor),
+                SizedBox(width: 6),
+                Text(
+                  '正在记录',
+                  style: TextStyle(
+                    color: kRecordingColor,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        SizedBox(
+          width: 180,
+          height: 48,
+          child: ElevatedButton.icon(
+            onPressed: recording ? _stopRecording : _startRecording,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: recording ? kRecordingColor : kPrimaryColor,
+              foregroundColor: Colors.white,
+              shape: const StadiumBorder(),
+              elevation: 4,
+            ),
+            icon: Icon(recording ? Icons.stop : Icons.play_arrow, size: 20),
+            label: Text(
+              recording ? '停止记录' : '开始记录',
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
