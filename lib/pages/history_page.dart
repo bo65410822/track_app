@@ -3,11 +3,11 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:track_app/data/track_database.dart';
-import 'package:track_app/track_detail_page.dart';
+import 'package:track_app/pages/track_detail_page.dart';
 import 'package:track_app/utils/format_utils.dart';
 
-import 'data/saved_track.dart';
-import 'main.dart' show kPrimaryColor;
+import '../data/saved_track.dart';
+import '../main.dart' show kPrimaryColor;
 
 class HistoryPage extends StatefulWidget {
   const HistoryPage({super.key});
@@ -150,6 +150,8 @@ class _HistoryPageState extends State<HistoryPage> {
           width: 64,
           height: 64,
           fit: BoxFit.cover,
+          cacheWidth: 128,
+          cacheHeight: 128,
         ),
       );
     }

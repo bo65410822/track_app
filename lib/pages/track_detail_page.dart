@@ -5,8 +5,8 @@ import 'package:track_app/utils/format_utils.dart';
 import 'package:track_app/utils/map_utils.dart';
 import 'package:x_amap_base/x_amap_base.dart';
 
-import 'data/saved_track.dart';
-import 'main.dart' show kPrimaryColor, kRecordingColor;
+import '../data/saved_track.dart';
+import '../main.dart';
 
 class TrackDetailPage extends StatefulWidget {
   final SavedTrack track;
