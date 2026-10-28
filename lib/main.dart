@@ -66,6 +66,9 @@ class _MapPageState extends State<MapPage> with WidgetsBindingObserver {
 
   final TrackRecorder _recorder = TrackRecorder();
 
+  // 当前选择的运动类型，默认跑步
+  SportType _selectedType = SportType.run;
+
   @override
   void initState() {
     super.initState();
@@ -115,6 +118,7 @@ class _MapPageState extends State<MapPage> with WidgetsBindingObserver {
         duration: duration.inMilliseconds,
         distance: distance,
         pointCount: _recorder.points.length,
+        type: _selectedType.code,
       ),
       _recorder.points,
     );
@@ -481,23 +485,88 @@ class _MapPageState extends State<MapPage> with WidgetsBindingObserver {
     );
   }
 
+  Widget _buildTypeSelector() {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.95),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: SportType.values.map((type) {
+          final selected = _selectedType == type;
+          return GestureDetector(
+            onTap: () {
+              setState(() {
+                _selectedType = type;
+              });
+            },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: selected ? kPrimaryColor : Colors.transparent,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    type.icon,
+                    size: 18,
+                    color: selected ? Colors.white : Colors.grey,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    type.label,
+                    style: TextStyle(
+                      color: selected ? Colors.white : Colors.grey,
+                      fontSize: 14,
+                      fontWeight:
+                          selected ? FontWeight.bold : FontWeight.normal,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
   Widget _buildRecordButton() {
     final recording = _recorder.isRecording;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
+        // 未记录：显示运动类型选择器
+        if (!recording)
+          Container(
+            margin: const EdgeInsets.only(bottom: 16),
+            child: _buildTypeSelector(),
+          ),
         if (recording)
           Container(
             margin: const EdgeInsets.only(bottom: 12),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
             child: Row(
               mainAxisSize: MainAxisSize.min,
-              children: const [
-                Icon(Icons.circle, size: 10, color: kRecordingColor),
-                SizedBox(width: 6),
+              children: [
+                const Icon(Icons.circle, size: 10, color: kRecordingColor),
+                const SizedBox(width: 6),
                 Text(
-                  '正在记录',
-                  style: TextStyle(
+                  '正在记录 · ${_selectedType.label}',
+                  style: const TextStyle(
                     color: kRecordingColor,
                     fontSize: 14,
                     fontWeight: FontWeight.w500,

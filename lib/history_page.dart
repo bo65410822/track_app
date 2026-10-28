@@ -63,6 +63,7 @@ class _HistoryPageState extends State<HistoryPage> {
   }
 
   Widget _buildTrackCard(SavedTrack track) {
+    final sportType = SportType.fromCode(track.type ?? 0);
     final kmText = (track.distance / 1000).toStringAsFixed(2);
     final durationText = formatDuration(Duration(milliseconds: track.duration));
     final timeText = _formatDateTime(track.startTime);
@@ -104,7 +105,7 @@ class _HistoryPageState extends State<HistoryPage> {
                     color: kPrimaryColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(Icons.route, color: kPrimaryColor, size: 30),
+                  child: Icon(sportType.icon, color: kPrimaryColor, size: 30),
                 ),
                 const SizedBox(width: 12),
                 // 中间信息
@@ -113,6 +114,22 @@ class _HistoryPageState extends State<HistoryPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      Row(
+                        children: [
+                          Icon(sportType.icon,
+                              size: 16, color: kPrimaryColor),
+                          const SizedBox(width: 4),
+                          Text(
+                            sportType.label,
+                            style: const TextStyle(
+                              color: kPrimaryColor,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.baseline,
                         textBaseline: TextBaseline.alphabetic,

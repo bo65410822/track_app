@@ -30,7 +30,7 @@ class TrackDatabase {
 
   Future<void> _createTable(Database db) async {
     await db.execute(
-      "CREATE TABLE tracks( id INTEGER PRIMARY KEY AUTOINCREMENT,start_time INTEGER,end_time INTEGER,duration INTEGER,distance REAL,point_count INTEGER)",
+      "CREATE TABLE tracks( id INTEGER PRIMARY KEY AUTOINCREMENT,start_time INTEGER,end_time INTEGER,duration INTEGER,distance REAL,point_count INTEGER,type INTEGER)",
     );
 
     await db.execute(
@@ -45,6 +45,7 @@ class TrackDatabase {
     values['duration'] = track.duration;
     values['distance'] = track.distance;
     values['point_count'] = track.pointCount;
+    values['type'] = track.type;
     Database db = await instance.database;
     return db.transaction((txn) async {
       int trackId = await txn.insert('tracks', values);
@@ -78,6 +79,7 @@ class TrackDatabase {
             pointCount: track['point_count'] != null
                 ? track['point_count'] as int
                 : 0,
+            type: track['type'] != null ? track['type'] as int : 0,
           ),
         )
         .toList();
