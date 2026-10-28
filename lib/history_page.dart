@@ -53,13 +53,87 @@ class _HistoryPageState extends State<HistoryPage> {
           ? const Center(child: CircularProgressIndicator())
           : tracks.isEmpty
               ? _buildEmptyState()
-              : ListView.builder(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  itemCount: tracks.length,
-                  itemBuilder: (context, index) {
-                    return _buildTrackCard(tracks[index]);
-                  },
+              : Column(
+                  children: [
+                    _buildSummary(),
+                    Expanded(
+                      child: ListView.builder(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        itemCount: tracks.length,
+                        itemBuilder: (context, index) {
+                          return _buildTrackCard(tracks[index]);
+                        },
+                      ),
+                    ),
+                  ],
                 ),
+    );
+  }
+
+  Widget _buildSummary() {
+    final totalDistance = tracks.fold<double>(0, (sum, t) => sum + t.distance);
+    final totalDurationMs = tracks.fold<int>(0, (sum, t) => sum + t.duration);
+    final kmText = (totalDistance / 1000).toStringAsFixed(2);
+    final durationText =
+        formatDuration(Duration(milliseconds: totalDurationMs));
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+      decoration: BoxDecoration(
+        color: kPrimaryColor,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: kPrimaryColor.withValues(alpha: 0.3),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          _summaryItem('${tracks.length}', '次数'),
+          _summaryDivider(),
+          _summaryItem(kmText, '总里程(公里)'),
+          _summaryDivider(),
+          _summaryItem(durationText, '总时长'),
+        ],
+      ),
+    );
+  }
+
+  Widget _summaryDivider() => Container(
+        width: 1,
+        height: 32,
+        color: Colors.white.withValues(alpha: 0.3),
+      );
+
+  Widget _summaryItem(String value, String label) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            value,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.9),
+            fontSize: 12,
+          ),
+        ),
+      ],
     );
   }
 
