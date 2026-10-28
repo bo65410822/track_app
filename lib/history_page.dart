@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:track_app/data/track_database.dart';
@@ -137,6 +139,31 @@ class _HistoryPageState extends State<HistoryPage> {
     );
   }
 
+  Widget _buildThumbnail(SavedTrack track, SportType sportType) {
+    final path = track.thumbnail;
+    final hasImage = path != null && path.isNotEmpty && File(path).existsSync();
+    if (hasImage) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Image.file(
+          File(path),
+          width: 64,
+          height: 64,
+          fit: BoxFit.cover,
+        ),
+      );
+    }
+    return Container(
+      width: 64,
+      height: 64,
+      decoration: BoxDecoration(
+        color: kPrimaryColor.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Icon(sportType.icon, color: kPrimaryColor, size: 30),
+    );
+  }
+
   Widget _buildTrackCard(SavedTrack track) {
     final sportType = SportType.fromCode(track.type ?? 0);
     final kmText = (track.distance / 1000).toStringAsFixed(2);
@@ -197,16 +224,8 @@ class _HistoryPageState extends State<HistoryPage> {
             padding: const EdgeInsets.all(12),
             child: Row(
               children: [
-                // 占位缩略图
-                Container(
-                  width: 64,
-                  height: 64,
-                  decoration: BoxDecoration(
-                    color: kPrimaryColor.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(sportType.icon, color: kPrimaryColor, size: 30),
-                ),
+                // 轨迹缩略图（无图时回退到运动图标）
+                _buildThumbnail(track, sportType),
                 const SizedBox(width: 12),
                 // 中间信息
                 Expanded(

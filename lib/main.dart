@@ -1,6 +1,9 @@
+import 'dart:io';
+
 import 'package:amap_map/amap_map.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:track_app/data/saved_track.dart';
@@ -69,6 +72,10 @@ class _MapPageState extends State<MapPage> with WidgetsBindingObserver {
   // 当前选择的运动类型，默认跑步
   SportType _selectedType = SportType.run;
 
+  // 停止记录后等待截图：fitBounds 相机停稳后生成缩略图
+  bool _pendingSnapshot = false;
+  int? _pendingSnapshotTrackId;
+
   @override
   void initState() {
     super.initState();
@@ -111,7 +118,7 @@ class _MapPageState extends State<MapPage> with WidgetsBindingObserver {
 
     final double distance = _recorder.calculateTotalDistance();
     final Duration duration = _recorder.duration;
-    await TrackDatabase.instance.insertTrack(
+    final trackId = await TrackDatabase.instance.insertTrack(
       SavedTrack(
         startTime: _recorder.points.first.timestamp,
         endTime: _recorder.points.last.timestamp,
@@ -126,6 +133,33 @@ class _MapPageState extends State<MapPage> with WidgetsBindingObserver {
     if (!mounted) return;
     ScaffoldMessenger.of(context)
         .showSnackBar(const SnackBar(content: Text('轨迹已保存')));
+
+    // 触发缩略图：把地图缩放到整条轨迹，相机停稳后（onCameraMoveEnd）截图
+    _pendingSnapshotTrackId = trackId;
+    _pendingSnapshot = true;
+    _mapController?.moveCamera(
+      fitTrackCameraUpdate(toLatLngList(_recorder.points)),
+    );
+  }
+
+  /// 相机停止移动：若处于待截图状态，等瓦片渲染后截图并保存为缩略图
+  void _onCameraMoveEnd(CameraPosition position) {
+    if (!_pendingSnapshot) return;
+    _pendingSnapshot = false; // 只截这一次
+    final trackId = _pendingSnapshotTrackId;
+    if (trackId == null) return;
+
+    Future.delayed(const Duration(milliseconds: 500), () async {
+      final controller = _mapController;
+      if (controller == null) return;
+      final bytes = await controller.takeSnapshot();
+      if (bytes == null) return;
+      final dir = await getApplicationDocumentsDirectory();
+      final path = '${dir.path}/thumb_$trackId.png';
+      await File(path).writeAsBytes(bytes);
+      await TrackDatabase.instance.updateThumbnail(trackId, path);
+      _pendingSnapshotTrackId = null;
+    });
   }
 
   Future<void> _checkPrivacyConsent() async {
@@ -290,6 +324,7 @@ class _MapPageState extends State<MapPage> with WidgetsBindingObserver {
                 );
               }
             },
+            onCameraMoveEnd: _onCameraMoveEnd,
             onLocationChanged: (location) {
               if (!isLocationValid(location)) {
                 debugPrint(

@@ -1,9 +1,8 @@
-import 'dart:math';
-
 import 'package:amap_map/amap_map.dart';
 import 'package:flutter/material.dart';
 import 'package:track_app/data/track_database.dart';
 import 'package:track_app/utils/format_utils.dart';
+import 'package:track_app/utils/map_utils.dart';
 import 'package:x_amap_base/x_amap_base.dart';
 
 import 'data/saved_track.dart';
@@ -63,22 +62,7 @@ class _TrackDetailPageState extends State<TrackDetailPage> {
                 AMapWidget(
                   onMapCreated: (controller) {
                     if (!mounted) return;
-                    final bounds = _calculateBounds(trackPoints);
-                    final latSpan =
-                        bounds.northeast.latitude - bounds.southwest.latitude;
-                    final lngSpan =
-                        bounds.northeast.longitude - bounds.southwest.longitude;
-
-                    if (latSpan < 0.0001 && lngSpan < 0.0001) {
-                      // 轨迹太集中（原地），用固定缩放，避免放大到极限
-                      controller.moveCamera(
-                        CameraUpdate.newLatLngZoom(trackPoints.first, 16),
-                      );
-                    } else {
-                      controller.moveCamera(
-                        CameraUpdate.newLatLngBounds(bounds, 80),
-                      );
-                    }
+                    controller.moveCamera(fitTrackCameraUpdate(trackPoints));
                   },
                   polylines: {
                     Polyline(
@@ -240,27 +224,5 @@ class _TrackDetailPageState extends State<TrackDetailPage> {
     String two(int n) => n.toString().padLeft(2, '0');
     return '${dt.year}-${two(dt.month)}-${two(dt.day)} '
         '${two(dt.hour)}:${two(dt.minute)}';
-  }
-
-  LatLngBounds _calculateBounds(List<LatLng> points) {
-    if (points.isEmpty) {
-      return LatLngBounds(southwest: LatLng(0, 0), northeast: LatLng(0, 0));
-    }
-
-    double minLat = double.infinity;
-    double maxLat = -double.infinity;
-    double minLng = double.infinity;
-    double maxLng = -double.infinity;
-    for (LatLng latLng in points) {
-      minLat = min(latLng.latitude, minLat);
-      maxLat = max(latLng.latitude, maxLat);
-      minLng = min(latLng.longitude, minLng);
-      maxLng = max(latLng.longitude, maxLng);
-    }
-    final bounds = LatLngBounds(
-      southwest: LatLng(minLat, minLng),
-      northeast: LatLng(maxLat, maxLng),
-    );
-    return bounds;
   }
 }

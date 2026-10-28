@@ -30,7 +30,7 @@ class TrackDatabase {
 
   Future<void> _createTable(Database db) async {
     await db.execute(
-      "CREATE TABLE tracks( id INTEGER PRIMARY KEY AUTOINCREMENT,start_time INTEGER,end_time INTEGER,duration INTEGER,distance REAL,point_count INTEGER,type INTEGER)",
+      "CREATE TABLE tracks( id INTEGER PRIMARY KEY AUTOINCREMENT,start_time INTEGER,end_time INTEGER,duration INTEGER,distance REAL,point_count INTEGER,type INTEGER,thumbnail TEXT)",
     );
 
     await db.execute(
@@ -80,9 +80,21 @@ class TrackDatabase {
                 ? track['point_count'] as int
                 : 0,
             type: track['type'] != null ? track['type'] as int : 0,
+            thumbnail: track['thumbnail'] as String?,
           ),
         )
         .toList();
+  }
+
+  /// 保存轨迹缩略图路径
+  Future<void> updateThumbnail(int trackId, String path) async {
+    Database db = await instance.database;
+    await db.update(
+      'tracks',
+      {'thumbnail': path},
+      where: 'id = ?',
+      whereArgs: [trackId],
+    );
   }
 
   Future<void> deleteTrack(SavedTrack track) async {

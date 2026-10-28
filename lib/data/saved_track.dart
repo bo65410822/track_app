@@ -8,6 +8,7 @@ class SavedTrack {
   final double distance;
   final int pointCount;
   final int? type;
+  final String? thumbnail;
 
   SavedTrack({
     this.id,
@@ -17,6 +18,7 @@ class SavedTrack {
     required this.distance,
     required this.pointCount,
     this.type = 0,
+    this.thumbnail,
   });
 }
 
