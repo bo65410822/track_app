@@ -1,8 +1,26 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
+
+// 读取 key.properties（不提交 git）。不存在时 keystoreProperties 为空，release 退回 debug 签名。
+val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("key.properties")
+val hasKeystore = keystorePropertiesFile.exists()
+if (hasKeystore) {
+    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+}
+
+// 高德 Key：有 key.properties 时按 release/debug 分别取。
+// debug Key 已公开（仅用于调试），作为缺省值保证无 key.properties 时也能调试；
+// release Key 必须在 key.properties 配置，不进 git。
+val defaultDebugAmapKey = "78c2f888a255e66a2c9b1344d48486bb"
+val amapKeyDebug = keystoreProperties.getProperty("amapKeyDebug") ?: defaultDebugAmapKey
+val amapKeyRelease = keystoreProperties.getProperty("amapKeyRelease") ?: amapKeyDebug
 
 android {
     namespace = "com.zhanbo.track"
@@ -15,25 +33,36 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.zhanbo.track"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
-        // Uses the version code from pubspec.yaml. When using split APKs, 1000 * ABI_VERSION
-        // is added automatically by Flutter. (https://developer.android.com/studio/build/configure-apk-splits#configure-APK-versions)
-        // You can force using the value of versionCode by specifying the `-P force-version-code-ignoring-abi=true`
-        // flag during build.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (hasKeystore) {
+            create("release") {
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+                storeFile = keystoreProperties.getProperty("storeFile")?.let { file(it) }
+                storePassword = keystoreProperties.getProperty("storePassword")
+            }
+        }
+    }
+
     buildTypes {
+        debug {
+            manifestPlaceholders["AMAP_API_KEY"] = amapKeyDebug
+        }
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // 有 key.properties 用正式签名，否则退回 debug 签名，保证无密钥环境也能构建
+            signingConfig = if (hasKeystore) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
+            manifestPlaceholders["AMAP_API_KEY"] = amapKeyRelease
         }
     }
 }

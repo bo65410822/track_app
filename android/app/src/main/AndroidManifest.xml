@@ -15,13 +15,13 @@
     <!--允许获取精确位置，精准定位必选-->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <application
-        android:label="track_app"
+        android:label="轨迹记"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
 
         <meta-data
             android:name="com.amap.api.v2.apikey"
-            android:value="78c2f888a255e66a2c9b1344d48486bb"/>
+            android:value="${AMAP_API_KEY}"/>
 
         <activity
             android:name=".MainActivity"
