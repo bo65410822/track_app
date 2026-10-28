@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:track_app/data/track_database.dart';
 import 'package:track_app/track_detail_page.dart';
 import 'package:track_app/utils/format_utils.dart';
@@ -67,13 +68,34 @@ class _HistoryPageState extends State<HistoryPage> {
     final kmText = (track.distance / 1000).toStringAsFixed(2);
     final durationText = formatDuration(Duration(milliseconds: track.duration));
     final timeText = _formatDateTime(track.startTime);
+    final metric = sportMetric(
+      sportType,
+      track.distance,
+      Duration(milliseconds: track.duration),
+    );
 
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
+    return Slidable(
+      key: ValueKey(track.id),
+      endActionPane: ActionPane(
+        motion: const DrawerMotion(),
+        extentRatio: 0.25,
+        children: [
+          SlidableAction(
+            onPressed: (_) => _onDeleteAction(track),
+            backgroundColor: Colors.red,
+            foregroundColor: Colors.white,
+            icon: Icons.delete,
+            label: '删除',
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ],
+      ),
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.06),
             blurRadius: 10,
@@ -85,13 +107,17 @@ class _HistoryPageState extends State<HistoryPage> {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
-          onTap: () {
-            Navigator.push(
+          onTap: () async {
+            final deleted = await Navigator.push<bool>(
               context,
               MaterialPageRoute(
                 builder: (context) => TrackDetailPage(track: track),
               ),
             );
+            // 详情页删除后返回 true，刷新列表
+            if (deleted == true && mounted) {
+              getTracks();
+            }
           },
           child: Padding(
             padding: const EdgeInsets.all(12),
@@ -157,6 +183,18 @@ class _HistoryPageState extends State<HistoryPage> {
                           Text(durationText,
                               style: const TextStyle(
                                   color: Colors.grey, fontSize: 14)),
+                          const SizedBox(width: 12),
+                          const Icon(Icons.speed,
+                              size: 15, color: Colors.grey),
+                          const SizedBox(width: 4),
+                          Flexible(
+                            child: Text(
+                              '${metric.$1} ${metric.$2}',
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                  color: Colors.grey, fontSize: 14),
+                            ),
+                          ),
                         ],
                       ),
                     ],
@@ -180,7 +218,46 @@ class _HistoryPageState extends State<HistoryPage> {
           ),
         ),
       ),
+      ),
     );
+  }
+
+  Future<void> _onDeleteAction(SavedTrack track) async {
+    final ok = await _confirmDelete();
+    if (ok) {
+      await _deleteTrack(track);
+    }
+  }
+
+  Future<bool> _confirmDelete() async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('删除记录'),
+        content: const Text('确定删除这条运动记录吗？删除后无法恢复。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
+  }
+
+  Future<void> _deleteTrack(SavedTrack track) async {
+    setState(() {
+      tracks.removeWhere((t) => t.id == track.id);
+    });
+    await TrackDatabase.instance.deleteTrack(track);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('已删除')));
   }
 
   Widget _buildEmptyState() {

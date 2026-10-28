@@ -85,9 +85,17 @@ class TrackDatabase {
         .toList();
   }
 
-  Future<int> deleteTrack(SavedTrack track) async {
+  Future<void> deleteTrack(SavedTrack track) async {
     Database db = await instance.database;
-    return await db.delete('tracks', where: 'id = ?', whereArgs: [track.id]);
+    await db.transaction((txn) async {
+      // 先删该轨迹的所有点，再删轨迹本身，避免孤儿数据
+      await txn.delete(
+        'track_points',
+        where: 'track_id = ?',
+        whereArgs: [track.id],
+      );
+      await txn.delete('tracks', where: 'id = ?', whereArgs: [track.id]);
+    });
   }
 
   Future<List<TrackPoint>> getTrackPoints(SavedTrack track) async {
