@@ -1,44 +1,20 @@
-import 'dart:io';
-
 import 'package:amap_map/amap_map.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:permission_handler/permission_handler.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:track_app/pages/home/locating_hint.dart';
 import 'package:track_app/pages/home/record_controls.dart';
 import 'package:track_app/pages/home/stats_card.dart';
+import 'package:track_app/pages/widgets/app_top_bar.dart';
 import 'package:x_amap_base/x_amap_base.dart';
 
 import '../data/saved_track.dart';
-import '../data/track_database.dart';
 import '../main.dart';
-import '../privacy.dart';
+import '../privacy/privacy_gate.dart';
+import '../services/location_permission_service.dart';
 import '../track/track_point.dart';
 import '../track/track_recorder.dart';
+import '../track/track_save_service.dart';
 import '../utils/map_utils.dart';
 import 'history_page.dart';
-
-class TrackApp extends StatelessWidget {
-  const TrackApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: '轨迹记',
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF009688), // 青绿主色
-        ),
-        scaffoldBackgroundColor: const Color(0xFFF1F7F4),
-      ),
-      home: const MapPage(),
-    );
-  }
-}
 
 class MapPage extends StatefulWidget {
   const MapPage({super.key});
@@ -48,9 +24,6 @@ class MapPage extends StatefulWidget {
 }
 
 class _MapPageState extends State<MapPage> with WidgetsBindingObserver {
-  static const int _currentPrivacyVersion = 1;
-  static const String _privacyVersionKey = 'privacy_consent_version';
-
   AMapController? _mapController;
 
   AMapLocation? _latestLocation;
@@ -64,6 +37,8 @@ class _MapPageState extends State<MapPage> with WidgetsBindingObserver {
 
   final TrackRecorder _recorder = TrackRecorder();
 
+  final TrackSaveService _trackSaveService = const TrackSaveService();
+
   // 当前选择的运动类型，默认跑步
   SportType _selectedType = SportType.run;
 
@@ -75,8 +50,11 @@ class _MapPageState extends State<MapPage> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkPrivacyConsent();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      var privacyGate = const PrivacyGate();
+      final passed = await privacyGate.ensureConsent(context);
+      if (!passed || !mounted) return;
+      await _initializeAmap();
     });
   }
 
@@ -90,6 +68,7 @@ class _MapPageState extends State<MapPage> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _mapController = null;
     super.dispose();
   }
 
@@ -110,31 +89,32 @@ class _MapPageState extends State<MapPage> with WidgetsBindingObserver {
           .showSnackBar(const SnackBar(content: Text('轨迹太短，未保存')));
       return;
     }
+    _saveTrackData();
+  }
 
-    final double distance = _recorder.calculateTotalDistance();
-    final Duration duration = _recorder.duration;
-    final trackId = await TrackDatabase.instance.insertTrack(
-      SavedTrack(
-        startTime: _recorder.points.first.timestamp,
-        endTime: _recorder.points.last.timestamp,
-        duration: duration.inMilliseconds,
-        distance: distance,
-        pointCount: _recorder.points.length,
-        type: _selectedType.code,
-      ),
-      _recorder.points,
-    );
+  Future<void> _saveTrackData() async {
+    try {
+      final trackId = await _trackSaveService.save(
+        points: _recorder.points,
+        type: _selectedType,
+        duration: _recorder.duration,
+        distance: _recorder.calculateTotalDistance(),
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('轨迹已保存')));
 
-    if (!mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('轨迹已保存')));
-
-    // 触发缩略图：把地图缩放到整条轨迹，相机停稳后（onCameraMoveEnd）截图
-    _pendingSnapshotTrackId = trackId;
-    _pendingSnapshot = true;
-    _mapController?.moveCamera(
-      fitTrackCameraUpdate(toLatLngList(_recorder.points)),
-    );
+      // 触发缩略图：把地图缩放到整条轨迹，相机停稳后（onCameraMoveEnd）截图
+      _pendingSnapshotTrackId = trackId;
+      _pendingSnapshot = true;
+      _mapController?.moveCamera(
+        fitTrackCameraUpdate(toLatLngList(_recorder.points)),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('保存轨迹失败')));
+    }
   }
 
   /// 相机停止移动：若处于待截图状态，等瓦片渲染后截图并保存为缩略图
@@ -145,49 +125,18 @@ class _MapPageState extends State<MapPage> with WidgetsBindingObserver {
     if (trackId == null) return;
 
     Future.delayed(const Duration(milliseconds: 500), () async {
-      final controller = _mapController;
-      if (controller == null) return;
-      final bytes = await controller.takeSnapshot();
-      if (bytes == null) return;
-      final dir = await getApplicationDocumentsDirectory();
-      final path = '${dir.path}/thumb_$trackId.png';
-      await File(path).writeAsBytes(bytes);
-      await TrackDatabase.instance.updateThumbnail(trackId, path);
+      if (!mounted) return;
+      try {
+        final controller = _mapController;
+        if (controller == null) return;
+        final bytes = await controller.takeSnapshot();
+        if (bytes == null) return;
+        await _trackSaveService.saveThumbnail(trackId: trackId, bytes: bytes);
+      } catch (e) {
+        debugPrint('$e');
+      }
       _pendingSnapshotTrackId = null;
     });
-  }
-
-  Future<void> _checkPrivacyConsent() async {
-    final preferences = await SharedPreferences.getInstance();
-    final agreedVersion = preferences.getInt(_privacyVersionKey);
-
-    if (!mounted) {
-      return;
-    }
-
-    if (agreedVersion == _currentPrivacyVersion) {
-      // 隐私协议已同意
-      await _initializeAmap();
-    } else {
-      // 需要更新隐私协议
-      await _handlePrivacyConsent();
-    }
-  }
-
-  Future<void> _handlePrivacyConsent() async {
-    final agree = await showPrivacyConsentDialog(context);
-    if (!mounted) {
-      return;
-    }
-    if (!agree) {
-      await SystemNavigator.pop();
-      return;
-    }
-
-    final preferences = await SharedPreferences.getInstance();
-    await preferences.setInt(_privacyVersionKey, _currentPrivacyVersion);
-
-    await _initializeAmap();
   }
 
   Future<void> _initializeAmap() async {
@@ -216,22 +165,27 @@ class _MapPageState extends State<MapPage> with WidgetsBindingObserver {
     }
     _permissionRequestInFlight = true;
     try {
-      final status = await Permission.location.request();
+      final locationPermission = const LocationPermissionService();
+      final result = await locationPermission.requestPermission();
       if (!mounted) {
         return;
       }
       setState(() {
         _permissionChecked = true;
-        _locationGranted = status.isGranted;
+        _locationGranted = result == LocationPermissionResult.granted;
       });
-      if (status.isGranted) {
-        // 位置权限已授予
-      } else if (status.isPermanentlyDenied) {
-        await openAppSettings();
-      } else {
-        // 位置权限被拒绝
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('需要定位权限才能显示当前位置')));
+      switch (result) {
+        case LocationPermissionResult.granted:
+          // 位置权限已授予
+          break;
+        case LocationPermissionResult.denied:
+          // 位置权限被拒绝
+          ScaffoldMessenger.of(context)
+              .showSnackBar(const SnackBar(content: Text('需要定位权限才能显示当前位置')));
+          break;
+        case LocationPermissionResult.permanentlyDenied:
+          await locationPermission.openSettings();
+          break;
       }
     } finally {
       _permissionRequestInFlight = false;
@@ -270,24 +224,9 @@ class _MapPageState extends State<MapPage> with WidgetsBindingObserver {
         : <Polyline>{};
 
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: const Color(0xFFEAF5F0),
-        elevation: 0,
-        titleSpacing: 16,
-        title: Row(
-          children: const [
-            Icon(Icons.directions_run, color: kPrimaryColor),
-            SizedBox(width: 8),
-            Text(
-              '轨迹记',
-              style: TextStyle(
-                color: kPrimaryColor,
-                fontWeight: FontWeight.bold,
-                fontSize: 20,
-              ),
-            ),
-          ],
-        ),
+      appBar: AppTopBar(
+        title: '轨迹记',
+        leadingIcon: Icons.directions_run,
         actions: [
           TextButton.icon(
             onPressed: () {
@@ -306,50 +245,19 @@ class _MapPageState extends State<MapPage> with WidgetsBindingObserver {
       body: Stack(
         children: [
           AMapWidget(
-            myLocationStyleOptions: MyLocationStyleOptions(_locationGranted),
+            myLocationStyleOptions: MyLocationStyleOptions(
+              _locationGranted,
+              circleFillColor: Colors.transparent,
+              circleStrokeColor: Colors.transparent,
+              circleStrokeWidth: 0,
+            ),
             onMapCreated: (controller) {
               _mapController = controller;
               // 如果定位已经先到达，这里补一次居中
-              if (!_hasCenteredOnUser && _latestLocation != null) {
-                setState(() {
-                  _hasCenteredOnUser = true;
-                });
-                controller.moveCamera(
-                  CameraUpdate.newLatLngZoom(_latestLocation!.latLng, 16),
-                );
-              }
+              _centerOnUserOnce(_latestLocation);
             },
             onCameraMoveEnd: _onCameraMoveEnd,
-            onLocationChanged: (location) {
-              if (!isLocationValid(location)) {
-                debugPrint(
-                  'no valid location result ：${location.latLng}, accuracy：${location.accuracy}',
-                );
-                return;
-              }
-              debugPrint(
-                'location result ：${location.latLng}, accuracy：${location.accuracy}',
-              );
-              _latestLocation = location;
-              if (!_hasCenteredOnUser && _mapController != null) {
-                setState(() {
-                  _hasCenteredOnUser = true;
-                });
-                _mapController!.moveCamera(
-                  CameraUpdate.newLatLngZoom(location.latLng, 16),
-                );
-              }
-              _recorder.addTrackPoint(
-                TrackPoint(
-                  latitude: location.latLng.latitude,
-                  longitude: location.latLng.longitude,
-                  timestamp: DateTime.now().millisecondsSinceEpoch,
-                ),
-              );
-              if (_recorder.isRecording) {
-                setState(() {});
-              }
-            },
+            onLocationChanged: _onLocationChanged,
             polylines: polylines,
           ),
 
@@ -395,11 +303,47 @@ class _MapPageState extends State<MapPage> with WidgetsBindingObserver {
         });
       },
       onRecordPressed: () {
-        setState(() {
-          _recorder.isRecording ? _stopRecording() : _startRecording();
-        });
+        _recorder.isRecording ? _stopRecording() : _startRecording();
       },
     );
+  }
+
+  void _centerOnUserOnce(AMapLocation? location) {
+    if (_hasCenteredOnUser) return;
+    if (location == null || _mapController == null) return;
+
+    setState(() {
+      _hasCenteredOnUser = true;
+    });
+    _mapController!.moveCamera(CameraUpdate.newLatLngZoom(location.latLng, 16));
+  }
+
+  void _recordLocation(AMapLocation location) {
+    _recorder.addTrackPoint(
+      TrackPoint(
+        latitude: location.latLng.latitude,
+        longitude: location.latLng.longitude,
+        timestamp: DateTime.now().millisecondsSinceEpoch,
+      ),
+    );
+    if (_recorder.isRecording) {
+      setState(() {});
+    }
+  }
+
+  void _onLocationChanged(AMapLocation location) {
+    if (!isLocationValid(location)) {
+      debugPrint(
+        'no valid location result ：${location.latLng}, accuracy：${location.accuracy}',
+      );
+      return;
+    }
+    debugPrint(
+      'location result ：${location.latLng}, accuracy：${location.accuracy}',
+    );
+    _latestLocation = location;
+    _centerOnUserOnce(location);
+    _recordLocation(location);
   }
 
   Widget _buildLocateButton() {

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:track_app/data/track_database.dart';
 import 'package:track_app/pages/track_detail_page.dart';
+import 'package:track_app/pages/widgets/app_top_bar.dart';
 import 'package:track_app/utils/format_utils.dart';
 
 import '../data/saved_track.dart';
@@ -38,19 +39,7 @@ class _HistoryPageState extends State<HistoryPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: const Color(0xFFEAF5F0),
-        elevation: 0,
-        iconTheme: const IconThemeData(color: kPrimaryColor),
-        title: const Text(
-          '历史记录',
-          style: TextStyle(
-            color: kPrimaryColor,
-            fontWeight: FontWeight.bold,
-            fontSize: 20,
-          ),
-        ),
-      ),
+      appBar: const AppTopBar(title: '历史记录'),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : tracks.isEmpty

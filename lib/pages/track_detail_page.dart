@@ -1,6 +1,7 @@
 import 'package:amap_map/amap_map.dart';
 import 'package:flutter/material.dart';
 import 'package:track_app/data/track_database.dart';
+import 'package:track_app/pages/widgets/app_top_bar.dart';
 import 'package:track_app/utils/format_utils.dart';
 import 'package:track_app/utils/map_utils.dart';
 import 'package:x_amap_base/x_amap_base.dart';
@@ -36,18 +37,8 @@ class _TrackDetailPageState extends State<TrackDetailPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: const Color(0xFFEAF5F0),
-        elevation: 0,
-        iconTheme: const IconThemeData(color: kPrimaryColor),
-        title: const Text(
-          '轨迹详情',
-          style: TextStyle(
-            color: kPrimaryColor,
-            fontWeight: FontWeight.bold,
-            fontSize: 20,
-          ),
-        ),
+      appBar: AppTopBar(
+        title: '轨迹详情',
         actions: [
           IconButton(
             icon: const Icon(Icons.delete_outline, color: kRecordingColor),
@@ -145,8 +136,12 @@ class _TrackDetailPageState extends State<TrackDetailPage> {
               Expanded(child: _statItem(Icons.route, '距离', kmText, '公里')),
               _divider(),
               Expanded(
-                child:
-                    _statItem(Icons.timer_outlined, '时长', durationText, null),
+                child: _statItem(
+                  Icons.timer_outlined,
+                  '时长',
+                  durationText,
+                  null,
+                ),
               ),
               _divider(),
               Expanded(
